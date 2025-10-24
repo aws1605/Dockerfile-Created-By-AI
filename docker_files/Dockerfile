@@ -1,48 +1,63 @@
-Here is an ideal Dockerfile for Python with best practices:
+Here is an ideal Dockerfile for Python that follows best practices:
 
-```
+```dockerfile
 # Use an official Python runtime as our base image
 FROM python:3.9-slim-buster
 
 # Set the working directory in the container to /app
 WORKDIR /app
 
-# Install dependencies from pip requirements file
+# Install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Copy source code into the container
+# Copy the current directory contents into the container at /app
 COPY . .
 
-# Multi-stage build: use a smaller base image for production and use it as our final stage
-FROM python:3.9-slim-buster as prod-image
+# Define environment variable
+ENV PYTHONDONTWRITEBYTECODE 1
 
-# Install dependencies in the production image
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Run command when the container is run
+CMD ["python", "main.py"]
 
-# Copy source code into the production image
-COPY . .
+# Multi-stage build for a faster and smaller image
+FROM python:3.9-slim-buster as builder
 
-# Set the working directory in the production image to /app
 WORKDIR /app
 
-# Run the application in the production image
-CMD ["python", "your_app.py"]
+COPY requirements.txt .
+COPY . .
+
+RUN pip install -r requirements.txt
+
+RUN python setup.py sdist && pip install dist/*.whl
+
+FROM python:3.9-slim-buster
+
+WORKDIR /app
+
+COPY --from=builder /app/dist/* .
+
+CMD ["python", "main.py"]
 ```
 
-Let me explain what each line does:
+Here's an explanation of the Dockerfile:
 
-* `FROM python:3.9-slim-buster`: We use an official Python 3.9 runtime as our base image, which is a slimmed-down version that includes only the essential dependencies.
-* `WORKDIR /app`: We set the working directory in the container to `/app`, where our application code will be located.
-* `COPY requirements.txt .`: We copy our `requirements.txt` file into the container, which specifies the Python packages required by our application.
-* `RUN pip install --no-cache-dir -r requirements.txt`: We use the `pip` package manager to install the dependencies specified in `requirements.txt`. The `--no-cache-dir` flag tells `pip` not to cache the installation, which can help reduce the size of the resulting image.
-* `COPY . .`: We copy our source code into the container. This assumes that your application code is located in the same directory as the Dockerfile.
-* `FROM python:3.9-slim-buster as prod-image`: We use a smaller base image (again, Python 3.9) for the production stage of our build. This will help reduce the size of our final image.
-* The rest of the file is similar to the first part, but with some additional steps:
-	+ `COPY requirements.txt .` and `RUN pip install ...`: We copy `requirements.txt` into the production image and install the dependencies.
-	+ `COPY . .`: We copy our source code into the production image.
-	+ `WORKDIR /app`: We set the working directory in the production image to `/app`.
-	+ `CMD ["python", "your_app.py"]`: We specify the command to run when the container is started. In this case, we're running a Python script called `your_app.py`. Replace this with your actual application entry point.
+1.  **Base Image**: The base image is `python:3.9-slim-buster`, which is an official Python runtime that comes with a set of pre-installed dependencies and tools.
 
-By using a multi-stage build, we can create a smaller final image that only includes the dependencies and code required for our application to run. This can help reduce the size of our Docker images and make them easier to manage.
+2.  **Working Directory**: The working directory in the container is set to `/app` using the `WORKDIR` instruction.
+
+3.  **Installing Dependencies**: The `requirements.txt` file is copied into the container, and then pip installs the dependencies listed in that file using the `pip install -r requirements.txt` command.
+
+4.  **Adding Source Code**: The current directory's contents are copied into the container at `/app` using the `COPY . .` instruction.
+
+5.  **Running the Application**: When the container is run, it will execute the command `python main.py`, where `main.py` is assumed to be the entry point of the application.
+
+6.  **Multi-Stage Build**: The Dockerfile uses a multi-stage build, which allows for faster and smaller images. In this case, there are two stages:
+
+    *   The first stage (`FROM python:3.9-slim-buster as builder`) is used to install dependencies and build the application.
+    *   The second stage (`FROM python:3.9-slim-buster`) uses the artifacts from the first stage to create a smaller, production-ready image.
+
+7.  **Copying Built Artifact**: In the second stage, the built artifact (the wheel file) is copied into the new image using `COPY --from=builder /app/dist/* .`.
+
+8.  **CMD Command**: The `CMD` instruction specifies the command that should be executed when the container is run.
