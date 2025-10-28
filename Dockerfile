@@ -1,32 +1,31 @@
-```
-# Stage 1: Build
-FROM maven:3.6.0-jdk8 AS builder
+```dockerfile
+# Base image: Use a minimal base image to reduce the final image size
+FROM maven:3.8-jdk-11 as builder
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Set environment variables
-ENV MAVEN_OPTS -Xmx512m
-
-# Copy dependencies
+# Copy the Maven project into the container at the specified path
 COPY pom.xml .
-RUN mvn dependency:resolve -B
 
-# Copy source code
-COPY src/main/java /app/src/main/java
-COPY src/main/resources /app/src/main/resources
+# Build the application using Maven
+RUN mvn clean package
 
-# Build the project
-RUN mvn clean package -B
+# Add source code to the image, but don't compile it yet
+COPY . .
 
-# Stage 2: Runtime
-FROM openjdk:8-jdk-alpine
+# Use a separate base image for running Java applications
+FROM openjdk:11-jdk-alpine as runner
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy dependencies (only the executable JAR file)
-COPY --from=builder /app/target/*.jar /app/
+# Copy the compiled application into the new image
+COPY --from=builder /app/target/*.jar .
 
-# Expose port
+# Expose the default port
 EXPOSE 8080
 
-# Run the application
-CMD ["java", "-jar", "target/myapp.jar"]
+# Run the Java application when the container launches
+CMD ["java", "-jar", "myapplication.jar"]
 ```
