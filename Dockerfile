@@ -1,30 +1,40 @@
 ```
-# Use official Python image as base, specifically the latest 3.x version
-FROM python:latest as builder
+# Use the official Node.js 14 image as our base, which is slightly newer than the latest version in stable at the time of writing.
+FROM node:14-alpine
 
-# Set working directory in container /app
+# Set the working directory to /app. This is where we'll place our source code and application data.
 WORKDIR /app
 
-# Copy requirements file from current directory and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy the contents of our current directory into the container at the specified path.
+COPY package*.json ./
 
-# Copy application code from current directory into the container at /app
+# Install dependencies.
+RUN npm install --production
+
+# Copy the rest of the application code (everything except for package*.json).
 COPY . .
 
-# Build the static files if needed, or use a separate build step for it
-RUN python -m compileall .
+# Expose port 3000, in case we need it for debugging or other reasons.
+EXPOSE 3000
 
-# Use multi-stage build to create final image with only production dependencies
-FROM python:latest as runner
+# Run the command to start the development server. We're using multi-stage builds here,
+# so this container doesn't have our production artifacts installed.
+CMD ["npm", "start"]
+
+# Multi-stage build: use a separate image for building the application, which includes all dependencies and build tools.
+FROM node:14-alpine AS build
+
 WORKDIR /app
+COPY package*.json ./
+RUN npm install --production
+COPY . .
+RUN npm run build
 
-# Copy the application code from the builder stage
-COPY --from=builder /app .
+# Use another stage to create the production-ready image. This one only needs Node.js installed,
+# as our application code is already copied over in the previous step.
+FROM node:14-alpine
 
-# Expose port 80 for the container
-EXPOSE 80
-
-# Run command when container launches
-CMD ["python", "main.py"]
+WORKDIR /app
+COPY --from=build /app/dist ./dist/
+CMD ["node", "dist/index.js"]
 ```
