@@ -1,31 +1,30 @@
-```dockerfile
-# Base image: Use a minimal base image to reduce the final image size
-FROM maven:3.8-jdk-11 as builder
+```
+# Use official Python image as base, specifically the latest 3.x version
+FROM python:latest as builder
 
-# Set the working directory in the container
+# Set working directory in container /app
 WORKDIR /app
 
-# Copy the Maven project into the container at the specified path
-COPY pom.xml .
+# Copy requirements file from current directory and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Build the application using Maven
-RUN mvn clean package
-
-# Add source code to the image, but don't compile it yet
+# Copy application code from current directory into the container at /app
 COPY . .
 
-# Use a separate base image for running Java applications
-FROM openjdk:11-jdk-alpine as runner
+# Build the static files if needed, or use a separate build step for it
+RUN python -m compileall .
 
-# Set the working directory in the container
+# Use multi-stage build to create final image with only production dependencies
+FROM python:latest as runner
 WORKDIR /app
 
-# Copy the compiled application into the new image
-COPY --from=builder /app/target/*.jar .
+# Copy the application code from the builder stage
+COPY --from=builder /app .
 
-# Expose the default port
-EXPOSE 8080
+# Expose port 80 for the container
+EXPOSE 80
 
-# Run the Java application when the container launches
-CMD ["java", "-jar", "myapplication.jar"]
+# Run command when container launches
+CMD ["python", "main.py"]
 ```
