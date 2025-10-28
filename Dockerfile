@@ -1,23 +1,40 @@
 ```dockerfile
-# Stage 1: Build
-FROM maven:3.8-jdk-11 AS builder
+# Use official Python base image
+FROM python:3.9-slim-buster as builder
+
+# Set environment variables for pip and virtual environment
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Install dependencies
+RUN pip install --upgrade pip
+COPY requirements.txt .
+
+RUN pip install -r requirements.txt
+
+# Set working directory
 WORKDIR /app
-COPY pom.xml .
-RUN mvn dependency:resolve -Bq!
 
 # Copy source code
 COPY . .
 
-# Install dependencies
-RUN mvn install -DskipTests
+# Build the application
+RUN pip install -e .
 
-# Create artifact
-RUN mvn package -Dmaven.test.skip=true
+# Multi-stage build for final image
+FROM python:3.9-slim-buster
 
-# Stage 2: Runtime
-FROM openjdk:11-jdk-slim
-WORKDIR /app
-COPY --from=builder /app/target/your-app.jar .
-EXPOSE 8080
-CMD ["java", "-jar", "your-app.jar"]
+# Set environment variables for production server
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Copy dependencies and source code from previous stage
+COPY --from=builder /app/requirements.txt .
+COPY --from=builder /app .
+
+# Expose the port
+EXPOSE 8000
+
+# Run the command to start the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
