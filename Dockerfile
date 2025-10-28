@@ -1,15 +1,23 @@
 ```dockerfile
 # Stage 1: Build
-FROM openjdk:11 AS build-env
+FROM maven:3.8-jdk-11 AS builder
 WORKDIR /app
-COPY src /app/src
 COPY pom.xml .
+RUN mvn dependency:resolve -Bq!
 
-RUN mvn clean package -Dmaven.test.skip=true
+# Copy source code
+COPY . .
+
+# Install dependencies
+RUN mvn install -DskipTests
+
+# Create artifact
+RUN mvn package -Dmaven.test.skip=true
 
 # Stage 2: Runtime
-FROM openjdk:11-jdk-alpine
+FROM openjdk:11-jdk-slim
 WORKDIR /app
-COPY --from=build-env /app/target/* /app/
-CMD ["java","-jar","*.jar"]
+COPY --from=builder /app/target/your-app.jar .
+EXPOSE 8080
+CMD ["java", "-jar", "your-app.jar"]
 ```
