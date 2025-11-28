@@ -1,52 +1,40 @@
-Here is an ideal Dockerfile for a C# .NET Core 3.1 application that follows best practices:
+Here is an ideal Dockerfile for a Java application that follows best practices:
 
 ```Dockerfile
-# Use an official .NET Core image as our base image
-FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build-env
+# Use an official OpenJDK 11 image as our base
+FROM openjdk:11-jdk-slim AS builder
 
-# Set the working directory to /app
+# Set the working directory in the container to /app
 WORKDIR /app
 
-# Copy csproj and restore as distinct layers
-COPY *.csproj .
-RUN dotnet restore
+# Copy the source code from the current directory into the container
+COPY pom.xml .
 
-# Copy everything else, including .cs files
-COPY . .
+# Install dependencies using Maven
+RUN mvn -q clean package
 
-# Build the application
-RUN dotnet build -c Release
+# Create a new stage for the runtime environment
+FROM openjdk:11-jdk-slim AS runtime
 
-# Create a production-ready multi-stage build
-FROM mcr.microsoft.com/dotnet/core/aspnet:3.1 AS runtime
-
-# Set working directory to /app
+# Set the working directory in the container to /app
 WORKDIR /app
 
-# Copy the compiled application from the previous stage
-COPY --from=build-env /app/bin/Release/netcoreapp3.1/your-executable.dll .
-COPY --from=build-env /app/*.csproj .
+# Copy the compiled application code from the builder stage into the runtime stage
+COPY --from=builder target/*.jar .
 
-# Run the application
-CMD ["dotnet", "your-executable.dll"]
+# Run the application using the command 'java -jar'
+CMD ["java", "-jar", "target/my-java-app.jar"]
 ```
 
-Here's what this Dockerfile does:
+Let's go through what each line does:
 
-1. **Base Image**: We start with an official .NET Core SDK image (`mcr.microsoft.com/dotnet/core/sdk:3.1`) which provides the necessary tools for building and compiling our C# application.
-2. **Working Directory**: We set the working directory to `/app`, where our application code will reside.
-3. **Copying dependencies**: We copy our `.csproj` file and restore the dependencies using `dotnet restore`.
-4. **Copying source code**: We copy all other files, including our C# code, into the working directory.
-5. **Building the application**: We build our application using `dotnet build -c Release`, which compiles our code in release mode.
-6. **Multi-stage build**: We create a new stage based on an official .NET Core ASP.NET image (`mcr.microsoft.com/dotnet/core/aspnet:3.1`). This stage is used to run our application in production.
-7. **Copying the compiled application**: We copy the compiled executable from the previous stage into this new stage, so that it can be run at runtime.
-8. **Running the application**: Finally, we set the command to run our application using `dotnet your-executable.dll`, where `your-executable` is the name of your executable.
+1. `FROM openjdk:11-jdk-slim AS builder`: This line uses an official OpenJDK 11 image as our base, and gives it the name `builder`. We'll use this stage to build our application.
+2. `WORKDIR /app`: This line sets the working directory in the container to `/app`.
+3. `COPY pom.xml .`: This line copies the `pom.xml` file from the current directory into the container at the specified location (`/app`). The `.` at the end means "copy this file into the same directory".
+4. `RUN mvn -q clean package`: This line installs dependencies using Maven, with the `-q` flag to suppress output.
+5. `FROM openjdk:11-jdk-slim AS runtime`: This line starts a new stage for our runtime environment, again using an official OpenJDK 11 image as our base, and gives it the name `runtime`. We'll use this stage to run our application.
+6. `WORKDIR /app`: This line sets the working directory in the container to `/app`, just like we did earlier.
+7. `COPY --from=builder target/*.jar .`: This line copies the compiled application code from the `builder` stage into the `runtime` stage, specifically looking for JAR files in the `target` directory and copying them into the current directory (`/app`).
+8. `CMD ["java", "-jar", "target/my-java-app.jar"]`: This line sets the default command to run when we start a new container from this image. In this case, it runs the Java application using the command `java -jar`, with the name of the JAR file (`my-java-app.jar`) as an argument.
 
-This Dockerfile follows best practices by:
-
-* Using official .NET Core images as base images
-* Separating build and runtime stages
-* Minimizing the amount of data copied between stages
-* Using a consistent naming convention for files and directories
-
-Note that you should replace `your-executable.dll` with the actual name of your executable.
+By using a multi-stage build, we can keep our dependencies and compiled code separate, which makes it easier to maintain and update our Docker image.
