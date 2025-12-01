@@ -1,52 +1,48 @@
 Here is an ideal Dockerfile for a Java application that follows best practices:
 
-```dockerfile
-# Use an official OpenJDK 11 image as our base image
-FROM AdoptOpenJDK/openjdk-11:alpine
+```Dockerfile
+# Use an official OpenJDK 11 image as the base image
+FROM openjdk:11-jdk-slim AS builder
 
 # Set the working directory in the container to /app
 WORKDIR /app
 
-# Copy the required files
-COPY pom.xml .
-COPY src/ .
+# Copy the source code into the container
+COPY pom.xml /app/
+COPY src/main/java /app/src/main/java
+COPY src/main/resources /app/src/main/resources
+COPY target /app/target
 
 # Install dependencies using Maven
-RUN mvn dependency:go-offline -Dmaven.test.skip=true
+RUN mvn -f /app/pom.xml package
 
-# Build the JAR file
-RUN mvn package -Dmaven.test.skip=true
-
-# Create a new layer for the final image
-FROM openjdk:11-jre-alpine
+# Create a new stage for the final image
+FROM openjdk:11-jdk-slim AS runtime
 
 # Set the working directory in the container to /app
 WORKDIR /app
 
-# Copy the JAR file into the final image
-COPY target/*.jar .
+# Copy the compiled application code into the container
+COPY --from=builder /app/target/classes /app/
+COPY --from=builder /app/target/lib /app/
 
-# Expose the port that the application runs on
-EXPOSE 8080
-
-# Run the command to start the Java application
-CMD ["java", "-jar", "target/my-app.jar"]
+# Run the application using Java
+CMD ["java", "-jar", "my-app.jar"]
 ```
 
-Here's a breakdown of this Dockerfile:
+Here's a brief explanation of each line:
 
-1. **Base Image**: We use an official OpenJDK 11 image as our base image, which includes all the necessary dependencies for running Java applications.
+1. `FROM openjdk:11-jdk-slim AS builder`: This line tells Docker to use an official OpenJDK 11 image as the base image for the build stage. The `AS` keyword gives the stage a name (`builder`) that can be used later in the Dockerfile.
+2. `WORKDIR /app`: This line sets the working directory in the container to `/app`. This is where we'll copy our source code and install dependencies.
+3. `COPY pom.xml /app/`: This line copies the `pom.xml` file from the current directory into the container at `/app`.
+4. `COPY src/main/java /app/src/main/java`: This line copies the Java source code from the current directory into the container at `/app/src/main/java`.
+5. `COPY src/main/resources /app/src/main/resources`: This line copies the resources (e.g., configuration files, images) from the current directory into the container at `/app/src/main/resources`.
+6. `COPY target /app/target`: This line copies the compiled Java classes and other build artifacts from the current directory into the container at `/app/target`.
+7. `RUN mvn -f /app/pom.xml package`: This line installs dependencies using Maven and compiles the Java code.
+8. `FROM openjdk:11-jdk-slim AS runtime`: This line starts a new stage for the final image, again using an official OpenJDK 11 image as the base image.
+9. `WORKDIR /app`: This line sets the working directory in the container to `/app`.
+10. `COPY --from=builder /app/target/classes /app/`: This line copies the compiled Java classes from the build stage into the runtime stage.
+11. `COPY --from=builder /app/target/lib /app/`: This line copies any dependent libraries or artifacts from the build stage into the runtime stage.
+12. `CMD ["java", "-jar", "my-app.jar"]`: This line sets the default command to run when the container is started, which is to execute the Java application using the `-jar` option.
 
-2. **Working Directory**: We set the working directory in the container to `/app`, where we will copy our source code and pom.xml file later.
-
-3. **Copying Files**: We copy our `pom.xml` and `src/` directories into the Docker image. This allows Maven to build our project.
-
-4. **Installing Dependencies**: We use Maven to install all the necessary dependencies for our project, including the ones specified in the `pom.xml` file. The `-Dmaven.test.skip=true` flag tells Maven to skip running tests during the build process.
-
-5. **Building the JAR File**: After installing dependencies, we use Maven to build a JAR file that contains our application's code.
-
-6. **Multi-Stage Build**: We then switch to another stage (the second `FROM` instruction) where we create a minimal image based on OpenJDK 11 and expose port 8080 for the application to run on.
-
-7. **Copying the JAR File**: In this final stage, we copy our built JAR file into the Docker image so that it can be executed when the container starts.
-
-8. **Running the Application**: Finally, we use a `CMD` instruction to specify the command to start our Java application: running the JAR file using `java -jar`. This will start our application when the Docker container is run with the `-d` flag (which runs the container in detached mode) or when we use the `docker run` command.
+This Dockerfile uses a multi-stage build, where we have two stages: `builder` and `runtime`. The `builder` stage is used to compile the Java code and install dependencies, while the `runtime` stage is used to create the final image that can be run.
